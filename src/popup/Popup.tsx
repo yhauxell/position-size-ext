@@ -104,7 +104,7 @@ export const Popup: FC = () => {
 
   return (
     <div className="w-full grid grid-cols-2 grid-flow-row gap-2">
-      <Card className='border-none'>
+      <Card className='border-none rounded-none'>
         <CardHeader className="text-lg">
           Calculate your position size
         </CardHeader>
