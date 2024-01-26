@@ -1,9 +1,9 @@
 {
-  "name": "position-size-ext",
+  "name": "position-size-calculator",
   "displayName": "Position Size Calculator",
   "version": "1.0.0",
   "author": "yhauxell@gmail.com",
-  "description": "",
+  "description": "A simple handy tool to calculate position size when trading",
   "type": "module",
   "license": "MIT",
   "keywords": [
