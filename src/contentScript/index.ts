@@ -8,4 +8,4 @@ chrome.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     }
 });
 
-console.log('injected here');
+console.log('injected here and here');
