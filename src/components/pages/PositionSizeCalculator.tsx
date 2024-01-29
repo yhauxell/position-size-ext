@@ -110,7 +110,7 @@ export const PositionSizeCalculator: FC = () => {
         <form onSubmit={handleSubmit(onSubmit)}>
           <CardContent>
             <div className="mb-4">
-              <Label htmlFor="accountBalance">Account balance</Label>
+              <Label htmlFor="accountBalance">Account size</Label>
               <Input
                 id="accountBalance"
                 placeholder="Account balance"

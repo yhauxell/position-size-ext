@@ -3,41 +3,46 @@ import { useState, useEffect } from 'react'
 import './SidePanel.css'
 import { PositionSizeCalculator } from '@/components/pages/PositionSizeCalculator'
 import { CalculatorIcon } from 'lucide-react'
-import { exchangeBalance } from '@/lib/exchangeBalance'
+import { Exchange, ExchangeData, exchangeBalance } from '@/lib/exchangeBalance'
+
+
+const ExchangeLogo = {
+  [Exchange.BITVAVO]: 'https://account.bitvavo.com/markets/favicon-32x32.png'
+}
 
 export const SidePanel = () => {
-  const [countSync, setCountSync] = useState(0)
-  const [balance, setBalance] = useState()
+
+  const [exchange, setExchange] = useState<ExchangeData>();
   const link = 'https://github.com/guocaoyi/create-chrome-ext'
 
-  useEffect(() => {
-    chrome.storage.sync.get(['count'], (result) => {
+
+    /* chrome.storage.sync.get(['count'], (result) => {
       setCountSync(result.count || 0)
-    })
-
-    chrome.runtime.onMessage.addListener((request) => {
-      if (request.type === 'COUNT') {
-        setCountSync(request.count || 0)
-      }
-    })
-  }, [])
-
+    }) */
 
   useEffect(() => {
     (async function() {
-      await exchangeBalance((exchangeBalance)=> setBalance(exchangeBalance))
+      const result = await exchangeBalance();
+
+      if(result){
+        setExchange(result);
+      }
+
     })();
   },[])
 
   return (
     <div className='min-h-screen flex flex-col flex-auto flex-shrink-0 antialiased bg-gray-50 text-gray-800'>
-    <div className="fixed flex flex-col top-0 right-0 bg-white h-full border-l p-2 items-center justify-start">
-      <CalculatorIcon className='hover:bg-gray-100 p-2 rounded-lg w-10 h-10'/>
-    </div>
-    <div className="bg-transparent mr-20 mt-4 ml-4">
-      <div>{balance || 'no balance detected'}</div>
-      <PositionSizeCalculator />
-    </div>
+      <div className="fixed flex flex-col top-0 right-0 bg-white h-full border-l p-2 items-center justify-start">
+        <CalculatorIcon className='hover:bg-gray-100 p-2 rounded-lg w-10 h-10'/>
+      </div>
+      <div className="bg-transparent mr-20 mt-4 ml-4">
+        {exchange && (<div className='flex gap-2 mb-4'>
+          <img src={exchange.logoUrl} alt="logo" className="w-4 h-4" />
+          <span className='font-bold'>Available balance: {exchange?.balance || 'no balance detected'}</span>
+        </div>)}
+        <PositionSizeCalculator />
+      </div>
     </div>
 
   )
