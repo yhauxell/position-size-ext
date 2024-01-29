@@ -13,10 +13,13 @@ export default defineManifest({
     128: 'img/logo-128.png',
   },
   action: {
-    default_popup: 'popup.html',
+    // default_popup: 'popup.html',
     default_icon: 'img/logo-48.png',
   },
   options_page: 'options.html',
+  side_panel: { 
+    default_path: 'sidepanel.html',
+  },
   background: {
     service_worker: 'src/background/index.ts',
     type: 'module',
@@ -33,5 +36,5 @@ export default defineManifest({
       matches: [],
     },
   ],
-  permissions: ['storage', 'activeTab', 'scripting']
+  permissions: ['storage', 'activeTab', 'scripting', 'sidePanel']
 })
