@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import './SidePanel.css'
 import { PositionSizeCalculator } from '@/components/pages/PositionSizeCalculator'
 import { CalculatorIcon } from 'lucide-react'
-import { Exchange, ExchangeData, exchangeBalance } from '@/lib/exchangeBalance'
+import { Exchange, ExchangeData, getCurrentExchange } from '@/lib/exchangeBalance'
 
 
 const ExchangeLogo = {
@@ -22,7 +22,7 @@ export const SidePanel = () => {
 
   useEffect(() => {
     (async function() {
-      const result = await exchangeBalance();
+      const result = await getCurrentExchange();
 
       if(result){
         setExchange(result);
@@ -38,8 +38,10 @@ export const SidePanel = () => {
       </div>
       <div className="bg-transparent mr-20 mt-4 ml-4">
         {exchange && (<div className='flex gap-2 mb-4'>
-          <img src={exchange.logoUrl} alt="logo" className="w-4 h-4" />
-          <span className='font-bold'>Available balance: {exchange?.balance || 'no balance detected'}</span>
+          <div className={`p-2 rounded-md ${exchange.bgColorClass}`}>
+            <img src={exchange.logoUrl} alt="logo" className="h-4" />
+            {/* <span className='font-bold'>Available balance: {exchange?.balance || 'no balance detected'}</span> */}
+          </div>
         </div>)}
         <PositionSizeCalculator />
       </div>
