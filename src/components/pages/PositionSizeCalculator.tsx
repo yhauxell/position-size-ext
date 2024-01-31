@@ -1,4 +1,4 @@
-import { useState, FC } from 'react'
+import { useState, FC, useEffect } from 'react'
 import * as yup from "yup";
 import { Button } from '@/components/ui/button';
 import Decimal from 'decimal.js';
@@ -34,10 +34,18 @@ interface CalculatedPositionSize {
   size: number;
   requiredCapital: number;
   r3: number;
-  withLeverage: number;
+  withLeverage?: number;
+}
+
+interface PositionSizeStorageData {
+  accountBalance?: number;
+  leverage?: number;
+  riskPercentage?: number;
 }
 
 Decimal.set({ precision: 4 });
+
+const STORAGE_KEY = 'PSC_ACCOUNT';
 
 export const PositionSizeCalculator: FC = () => {
   const {
@@ -51,19 +59,27 @@ export const PositionSizeCalculator: FC = () => {
   const [positionSize, setPositionSize] = useState<CalculatedPositionSize>();
   const defaultLeverage = 10;
   const [leverage, setLeverage] = useState<number>(defaultLeverage);
+  const [storedData, setStoredData] = useState<PositionSizeStorageData>({
+    leverage
+  });
 
-/*
+  console.log(storedData);
+
+
   useEffect(() => {
-    const storedData = localStorage.getItem(LS_KEY_ACCOUNT);
-    if(storedData){
-      const parsedData = JSON.parse(storedData);
+    
+    const getStoredData = async ()=> {
+      const data = await chrome.storage.sync.get(STORAGE_KEY);
 
-      if(parsedData.leverage){
-        setLeverage(parsedData.leverage)
+      if(data[STORAGE_KEY]){
+        setStoredData(data[STORAGE_KEY]);
+        setLeverage(storedData.leverage ?? 0)
       }
     }
 
-  }, []) */
+    getStoredData();
+
+  }, []) 
 
 
   const onSubmit = ({
@@ -87,7 +103,7 @@ export const PositionSizeCalculator: FC = () => {
     const riskAmount = dAccountBalance.mul(dRiskPercentage.div(100));
     const size = riskAmount.div(distanceToStop);
     const requiredCapital = dEntryPrice.mul(size);
-    const withLeverage = requiredCapital.div(leverage);
+    const withLeverage = leverage > 0 ? requiredCapital.div(leverage) : undefined;
 
     setPositionSize({
       distanceToStop: distanceToStop.toNumber(),
@@ -95,10 +111,14 @@ export const PositionSizeCalculator: FC = () => {
       size: size.toNumber(),
       requiredCapital: requiredCapital.toNumber(),
       r3: r3.toSignificantDigits(2).toNumber(),
-      withLeverage: withLeverage.toNumber(),
+      withLeverage: withLeverage?.toNumber(),
     });
 
-    // localStorage.setItem(LS_KEY_ACCOUNT, JSON.stringify({accountBalance, leverage, riskPercentage}));
+    chrome.storage.sync.set({ [STORAGE_KEY]: {
+      accountBalance: accountBalance,
+      leverage,
+      riskPercentage
+    } });
   };
 
   return (
@@ -115,11 +135,12 @@ export const PositionSizeCalculator: FC = () => {
                 id="accountBalance"
                 placeholder="Account balance"
                 type="text"
+                defaultValue={storedData.accountBalance}
                 {...register("accountBalance", { required: true })}
                 aria-invalid={!!errors.accountBalance}
               />
               {errors.accountBalance && (
-                <p className="input-error">Account balance is required</p>
+                <p className="text-red-600">Account balance is required</p>
               )}
             </div>
             <div className="mb-4">
@@ -128,6 +149,7 @@ export const PositionSizeCalculator: FC = () => {
                 id="riskPercentage"
                 placeholder="Risk % per trade"
                 type="text"
+                defaultValue={storedData.riskPercentage}
                 {...register("riskPercentage")}
                 aria-invalid={!!errors.entryPrice}
               />
