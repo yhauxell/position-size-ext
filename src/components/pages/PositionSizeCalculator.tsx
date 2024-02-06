@@ -63,9 +63,6 @@ export const PositionSizeCalculator: FC = () => {
     leverage
   });
 
-  console.log(storedData);
-
-
   useEffect(() => {
     
     const getStoredData = async ()=> {

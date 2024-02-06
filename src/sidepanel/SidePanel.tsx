@@ -13,12 +13,6 @@ const ExchangeLogo = {
 export const SidePanel = () => {
 
   const [exchange, setExchange] = useState<ExchangeData>();
-  const link = 'https://github.com/guocaoyi/create-chrome-ext'
-
-
-    /* chrome.storage.sync.get(['count'], (result) => {
-      setCountSync(result.count || 0)
-    }) */
 
   useEffect(() => {
     (async function() {
