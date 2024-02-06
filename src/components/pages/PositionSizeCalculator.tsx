@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { MagicWandIcon } from '@radix-ui/react-icons';
+import { ExchangeData } from '@/lib/exchangeBalance';
 
 type FormData = {
   accountBalance: number;
@@ -47,7 +48,7 @@ Decimal.set({ precision: 4 });
 
 const STORAGE_KEY = 'PSC_ACCOUNT';
 
-export const PositionSizeCalculator: FC = () => {
+export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchange }) => {
   const {
     register,
     handleSubmit,
@@ -63,20 +64,22 @@ export const PositionSizeCalculator: FC = () => {
     leverage
   });
 
-  useEffect(() => {
-    
-    const getStoredData = async ()=> {
-      const data = await chrome.storage.sync.get(STORAGE_KEY);
+  const storageKey = `${STORAGE_KEY}${exchange ? exchange.code : ''}`;
 
-      if(data[STORAGE_KEY]){
-        setStoredData(data[STORAGE_KEY]);
+  useEffect(() => {
+
+    const getStoredData = async () => {
+      const data = await chrome.storage.sync.get(storageKey);
+
+      if (data[storageKey]) {
+        setStoredData(data[storageKey]);
         setLeverage(storedData.leverage ?? 0)
       }
     }
 
     getStoredData();
 
-  }, []) 
+  }, [])
 
 
   const onSubmit = ({
@@ -111,11 +114,13 @@ export const PositionSizeCalculator: FC = () => {
       withLeverage: withLeverage?.toNumber(),
     });
 
-    chrome.storage.sync.set({ [STORAGE_KEY]: {
-      accountBalance: accountBalance,
-      leverage,
-      riskPercentage
-    } });
+    chrome.storage.sync.set({
+      [storageKey]: {
+        accountBalance: accountBalance,
+        leverage,
+        riskPercentage
+      }
+    });
   };
 
   return (
@@ -145,7 +150,7 @@ export const PositionSizeCalculator: FC = () => {
               <Input
                 id="riskPercentage"
                 placeholder="Risk % per trade"
-                type="text"
+                type="number"
                 defaultValue={storedData.riskPercentage}
                 {...register("riskPercentage")}
                 aria-invalid={!!errors.entryPrice}
@@ -164,7 +169,7 @@ export const PositionSizeCalculator: FC = () => {
                 <p className="input-error">Entry price required</p>
               )}
             </div>
-            <div className="mb-4">
+            {exchange?.futureOptions && (<div className="mb-4">
               <Label className="mb-2 flex justify-between">
                 Leverage <span>{leverage}x</span>
               </Label>
@@ -177,7 +182,7 @@ export const PositionSizeCalculator: FC = () => {
                 onValueChange={([value]) => setLeverage(value)}
               />
               <div></div>
-            </div>
+            </div>)}
             <div className="mb-4">
               <Label htmlFor="sl">Stop loss</Label>
               <Input
@@ -224,10 +229,10 @@ export const PositionSizeCalculator: FC = () => {
           <span className="mr-4 font-bold">Capital</span>
           {positionSize?.requiredCapital}
         </div>
-        <div className="flex justify-between mb-4">
+        {exchange?.futureOptions && (<div className="flex justify-between mb-4">
           <span className="mr-4 font-bold">Capital with leverage</span>
           {positionSize?.withLeverage}
-        </div>
+        </div>)}
       </Card>
     </div>
   );

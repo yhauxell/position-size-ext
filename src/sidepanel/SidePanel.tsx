@@ -1,3 +1,4 @@
+import packageData from '../../package.json'
 import { useState, useEffect } from 'react'
 
 import './SidePanel.css'
@@ -37,7 +38,8 @@ export const SidePanel = () => {
             {/* <span className='font-bold'>Available balance: {exchange?.balance || 'no balance detected'}</span> */}
           </div>
         </div>)}
-        <PositionSizeCalculator />
+        <PositionSizeCalculator exchange={exchange}/>
+        <span className='absolute top-2 right-16 inline-flex items-center rounded-md bg-gray-50 px-2 py-1 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-700/10'>v{packageData.version}</span>
       </div>
     </div>
 
