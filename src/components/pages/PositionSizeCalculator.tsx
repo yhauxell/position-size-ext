@@ -2,7 +2,7 @@ import { useState, FC, useEffect } from 'react'
 import * as yup from "yup";
 import { Button } from '@/components/ui/button';
 import Decimal from 'decimal.js';
-import { useForm } from 'react-hook-form';
+import { useForm, useFormContext, useWatch } from 'react-hook-form';
 import { yupResolver } from "@hookform/resolvers/yup";
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -52,10 +52,18 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<FormData>({
     resolver: yupResolver(schema),
+    mode: 'onChange'
   });
+
+  const form = useWatch(
+    {
+      control
+    }
+  )
 
   const [positionSize, setPositionSize] = useState<CalculatedPositionSize>();
   const defaultLeverage = 10;
@@ -81,7 +89,6 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
 
   }, [])
 
-
   const onSubmit = ({
     accountBalance,
     entryPrice,
@@ -89,28 +96,31 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
     sl,
     tp,
   }: FormData) => {
-    //do the math
+    //do the math 
 
-    const dAccountBalance = new Decimal(accountBalance);
-    const dEntryPrice = new Decimal(entryPrice);
-    const dRiskPercentage = new Decimal(riskPercentage);
-    const dSl = new Decimal(sl);
-    const dTp = new Decimal(tp);
+    const dAccountBalance = new Decimal(accountBalance || 0);
+    const dEntryPrice = new Decimal(entryPrice || 0);
+    const dRiskPercentage = new Decimal(riskPercentage || 0);
+    const dSl = new Decimal(sl || 0);
+    const dTp = new Decimal(tp || 0); 
 
     const distanceToStop = dEntryPrice.minus(dSl);
-    const distanceToProfit = dTp.minus(entryPrice);
+    const distanceToProfit = dTp.minus(dEntryPrice);
     const r3 = new Decimal(100).div(distanceToStop.div(distanceToProfit)).div(100); //100 / (distanceToStop / distanceToProfit) / 100);
     const riskAmount = dAccountBalance.mul(dRiskPercentage.div(100));
-    const size = riskAmount.div(distanceToStop);
+    const size = riskAmount.div(distanceToStop); 
     const requiredCapital = dEntryPrice.mul(size);
     const withLeverage = leverage > 0 ? requiredCapital.div(leverage) : undefined;
+
+    const r3Result = r3.toSignificantDigits(2).toNumber();
+    const sizeResult = size.toNumber();
 
     setPositionSize({
       distanceToStop: distanceToStop.toNumber(),
       riskAmount: riskAmount.toNumber(),
-      size: size.toNumber(),
+      size: isNaN(sizeResult) || !isFinite(sizeResult) ? 0 : sizeResult,
       requiredCapital: requiredCapital.toNumber(),
-      r3: r3.toSignificantDigits(2).toNumber(),
+      r3: isNaN(r3Result) ? 0 : r3Result,
       withLeverage: withLeverage?.toNumber(),
     });
 
@@ -122,6 +132,15 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
       }
     });
   };
+
+
+  useEffect(()=> {
+
+    onSubmit({
+      ...form,
+    })
+
+  }, [form])
 
   return (
     <div className="w-full grid grid-cols-1 grid-flow-row gap-2">
@@ -204,12 +223,12 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
               />
             </div>
           </CardContent>
-          <CardFooter>
+          {/* <CardFooter>
             <Button variant="default" size="lg" className="flex-1">
               Calculate
               <MagicWandIcon className="ml-2" />
             </Button>
-          </CardFooter>
+          </CardFooter> */}
         </form>
       </Card>
       <Card className="p-6 bg-slate-100">
