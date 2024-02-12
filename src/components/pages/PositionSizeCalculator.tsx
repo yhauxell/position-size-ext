@@ -1,18 +1,21 @@
 import { useState, FC, useEffect } from 'react'
 import * as yup from "yup";
-import { Button } from '@/components/ui/button';
+
 import Decimal from 'decimal.js';
-import { useForm, useFormContext, useWatch } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { yupResolver } from "@hookform/resolvers/yup";
-import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
-import { MagicWandIcon } from '@radix-ui/react-icons';
+
 import { ExchangeData } from '@/lib/exchangeBalance';
+import { Tooltip, TooltipProvider } from '@radix-ui/react-tooltip';
+import { TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { InfoIcon } from 'lucide-react';
 
 type FormData = {
-  accountBalance: number;
+  accountBalance?: number;
   entryPrice: number;
   riskPercentage: number;
   sl: number;
@@ -48,6 +51,49 @@ Decimal.set({ precision: 4 });
 
 const STORAGE_KEY = 'PSC_ACCOUNT';
 
+const caculatePositionSize = ({
+  accountBalance,
+  entryPrice,
+  riskPercentage,
+  sl,
+  tp,
+}: FormData, leverage: number) => {
+  //do the math 
+
+  const dAccountBalance = new Decimal(accountBalance || 0);
+  const dEntryPrice = new Decimal(entryPrice || 0);
+  const dRiskPercentage = new Decimal(riskPercentage || 0);
+  const dSl = new Decimal(sl || 0);
+  const dTp = new Decimal(tp || 0);
+
+  const distanceToStop = dEntryPrice.minus(dSl);
+  const distanceToProfit = dTp.minus(dEntryPrice);
+  const r3 = new Decimal(100).div(distanceToStop.div(distanceToProfit)).div(100); //100 / (distanceToStop / distanceToProfit) / 100);
+  const riskAmount = dAccountBalance.mul(dRiskPercentage.div(100));
+  const size = riskAmount.div(distanceToStop);
+  const requiredCapital = dEntryPrice.mul(size);
+  const withLeverage = leverage > 0 ? requiredCapital.div(leverage) : undefined;
+
+  const r3Result = r3.toSignificantDigits(2).toNumber();
+  const sizeResult = size.toNumber();
+  const requiredCapitalResult = requiredCapital.toNumber()
+
+  return {
+    distanceToStop: distanceToStop.toNumber(),
+    riskAmount: riskAmount.toNumber(),
+    size: isNaN(sizeResult) || !isFinite(sizeResult) ? 0 : sizeResult,
+    requiredCapital: isNaN(requiredCapitalResult) || !isFinite(requiredCapitalResult) ? 0 : requiredCapitalResult,
+    r3: isNaN(r3Result) ? 0 : r3Result,
+    withLeverage: withLeverage?.toNumber(),
+  };
+
+};
+
+enum Direction {
+  LONG = 'long',
+  SHORT = 'short'
+}
+
 export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchange }) => {
   const {
     register,
@@ -59,11 +105,9 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
     mode: 'onChange'
   });
 
-  const form = useWatch(
-    {
-      control
-    }
-  )
+  const [direction, setDirection] = useState<Direction>(Direction.LONG);
+
+  const form = useWatch({ control });
 
   const [positionSize, setPositionSize] = useState<CalculatedPositionSize>();
   const defaultLeverage = 10;
@@ -89,170 +133,165 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
 
   }, [])
 
-  const onSubmit = ({
-    accountBalance,
-    entryPrice,
-    riskPercentage,
-    sl,
-    tp,
-  }: FormData) => {
-    //do the math 
 
-    const dAccountBalance = new Decimal(accountBalance || 0);
-    const dEntryPrice = new Decimal(entryPrice || 0);
-    const dRiskPercentage = new Decimal(riskPercentage || 0);
-    const dSl = new Decimal(sl || 0);
-    const dTp = new Decimal(tp || 0); 
+  useEffect(() => {
+    const data = caculatePositionSize(form, leverage)
 
-    const distanceToStop = dEntryPrice.minus(dSl);
-    const distanceToProfit = dTp.minus(dEntryPrice);
-    const r3 = new Decimal(100).div(distanceToStop.div(distanceToProfit)).div(100); //100 / (distanceToStop / distanceToProfit) / 100);
-    const riskAmount = dAccountBalance.mul(dRiskPercentage.div(100));
-    const size = riskAmount.div(distanceToStop); 
-    const requiredCapital = dEntryPrice.mul(size);
-    const withLeverage = leverage > 0 ? requiredCapital.div(leverage) : undefined;
+    setPositionSize(data);
 
-    const r3Result = r3.toSignificantDigits(2).toNumber();
-    const sizeResult = size.toNumber();
-
-    setPositionSize({
-      distanceToStop: distanceToStop.toNumber(),
-      riskAmount: riskAmount.toNumber(),
-      size: isNaN(sizeResult) || !isFinite(sizeResult) ? 0 : sizeResult,
-      requiredCapital: requiredCapital.toNumber(),
-      r3: isNaN(r3Result) ? 0 : r3Result,
-      withLeverage: withLeverage?.toNumber(),
-    });
-
+    //save data to storage
     chrome.storage.sync.set({
       [storageKey]: {
-        accountBalance: accountBalance,
+        accountBalance: form.accountBalance,
         leverage,
-        riskPercentage
+        riskPercentage: form.riskPercentage
       }
     });
-  };
-
-
-  useEffect(()=> {
-
-    onSubmit({
-      ...form,
-    })
 
   }, [form])
 
   return (
     <div className="w-full grid grid-cols-1 grid-flow-row gap-2">
-      <Card>
-        <CardHeader className="text-lg">
-          Calculate your position size
-        </CardHeader>
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <CardContent>
-            <div className="mb-4">
-              <Label htmlFor="accountBalance">Account size</Label>
-              <Input
-                id="accountBalance"
-                placeholder="Account balance"
-                type="text"
-                defaultValue={storedData.accountBalance}
-                {...register("accountBalance", { required: true })}
-                aria-invalid={!!errors.accountBalance}
-              />
-              {errors.accountBalance && (
-                <p className="text-red-600">Account balance is required</p>
-              )}
+      <TooltipProvider>
+        <Card>
+          <CardHeader className="text-lg">
+            {/* <Tabs defaultValue="long" className='w-full'>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger className="data-[state=active]:text-green-600" value="long" onClick={() => setDirection(Direction.LONG)}>Long</TabsTrigger>
+              <TabsTrigger className=" data-[state=active]:text-red-600" value="short" onClick={() => setDirection(Direction.SHORT)}>Short</TabsTrigger>
+            </TabsList>
+          </Tabs> */}
+
+            <div className="flex justify-between">
+              <span className="mr-4 font-bold flex items-center gap-1">
+                Position Size
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <InfoIcon className='w-3' />
+                  </TooltipTrigger>
+                  <TooltipContent className='font-normal'>
+                    <p>Fill all the fields bellow to calculate your position size</p>
+                  </TooltipContent>
+                </Tooltip>
+              </span>
+              {positionSize?.size}
             </div>
-            <div className="mb-4">
-              <Label htmlFor="riskPercentage">Risk %</Label>
-              <Input
-                id="riskPercentage"
-                placeholder="Risk % per trade"
-                type="number"
-                defaultValue={storedData.riskPercentage}
-                {...register("riskPercentage")}
-                aria-invalid={!!errors.entryPrice}
-              />
-            </div>
-            <div className="mb-4">
-              <Label htmlFor="entryPrice">Entry price</Label>
-              <Input
-                id="entryPrice"
-                placeholder="Enter your entry price"
-                type="text"
-                {...register("entryPrice")}
-                aria-invalid={!!errors.entryPrice}
-              />
-              {errors.entryPrice && (
-                <p className="input-error">Entry price required</p>
-              )}
-            </div>
-            {exchange?.futureOptions && (<div className="mb-4">
-              <Label className="mb-2 flex justify-between">
-                Leverage <span>{leverage}x</span>
-              </Label>
-              <Slider
-                className=""
-                defaultValue={[defaultLeverage]}
-                value={[leverage]}
-                max={100}
-                step={1}
-                onValueChange={([value]) => setLeverage(value)}
-              />
-              <div></div>
-            </div>)}
-            <div className="mb-4">
-              <Label htmlFor="sl">Stop loss</Label>
-              <Input
-                id="sl"
-                placeholder="Stop loss price"
-                type="text"
-                {...register("sl")}
-                aria-invalid={!!errors.entryPrice}
-              />
-            </div>
-            <div>
-              <Label htmlFor="tp">Take profit</Label>
-              <Input
-                id="tp"
-                placeholder="Take profit price"
-                type="text"
-                {...register("tp")}
-                aria-invalid={!!errors.entryPrice}
-              />
-            </div>
-          </CardContent>
-          {/* <CardFooter>
+
+          </CardHeader>
+          <form>
+            <CardContent>
+              <Card className='mb-6'>
+                <CardContent className='p-4'>
+                  <div className="flex justify-between mb-4">
+                    <span className="mr-4 font-bold">Risk amount</span>
+                    {positionSize?.riskAmount}
+                  </div>
+                  <div className="flex justify-between mb-4">
+                    <span className="mr-4 font-bold">Required capital</span>
+                    {positionSize?.requiredCapital}
+                  </div>
+                  {exchange?.futureOptions && (<div className="flex justify-between mb-4">
+                    <span className="mr-4 font-bold">Capital with leverage</span>
+                    {positionSize?.withLeverage}
+                  </div>)}
+                  <div className="flex justify-between mb-4">
+                    <span className="mr-4 font-bold flex gap-1 items-center">
+                      Ratio
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <InfoIcon className='w-3' />
+                        </TooltipTrigger>
+                        <TooltipContent className='font-normal'>
+                          <p>Only when Take Profit target is entered</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </span>
+                    {positionSize?.r3 && `1:${positionSize?.r3}`}
+                  </div>
+                </CardContent>
+              </Card>
+              <div className="mb-4">
+                <Label htmlFor='accountBalance'>Account size</Label>
+                <Input
+                  id="accountBalance"
+                  placeholder="Account balance"
+                  type="text"
+                  defaultValue={storedData.accountBalance}
+                  {...register("accountBalance", { required: true })}
+                  aria-invalid={!!errors.accountBalance}
+                />
+                {errors.accountBalance && (
+                  <p className="text-red-600">Account balance is required</p>
+                )}
+              </div>
+              <div className="mb-4">
+                <Label htmlFor='riskPercentage'>Risk %</Label>
+                <Input
+                  id="riskPercentage"
+                  placeholder="Risk % per trade"
+                  type="number"
+                  defaultValue={storedData.riskPercentage}
+                  {...register("riskPercentage")}
+                  aria-invalid={!!errors.entryPrice}
+                />
+              </div>
+              <div className="mb-4">
+                <Label htmlFor='entryPrice'>Entry</Label>
+                <Input
+                  id="entryPrice"
+                  placeholder="Enter your entry price"
+                  type="text"
+                  {...register("entryPrice")}
+                  aria-invalid={!!errors.entryPrice}
+                />
+                {errors.entryPrice && (
+                  <p className="input-error">Entry price required</p>
+                )}
+              </div>
+              {exchange?.futureOptions && (<div className="mb-4">
+                <Label className="mb-2 flex justify-between">
+                  Leverage <span>{leverage}x</span>
+                </Label>
+                <Slider
+                  className=""
+                  defaultValue={[defaultLeverage]}
+                  value={[leverage]}
+                  max={100}
+                  step={1}
+                  onValueChange={([value]) => setLeverage(value)}
+                />
+                <div></div>
+              </div>)}
+              <div className="mb-4">
+                <Label htmlFor='sl'>Stop Loss</Label>
+                <Input
+                  id="sl"
+                  placeholder="Stop loss price"
+                  type="text"
+                  {...register("sl")}
+                  aria-invalid={!!errors.entryPrice}
+                />
+              </div>
+              <div>
+                <Label htmlFor='tp'>Take Profit</Label>
+                <Input
+                  id="tp"
+                  placeholder="Take profit price"
+                  type="text"
+                  {...register("tp")}
+                  aria-invalid={!!errors.entryPrice}
+                />
+              </div>
+            </CardContent>
+            {/* <CardFooter>
             <Button variant="default" size="lg" className="flex-1">
               Calculate
               <MagicWandIcon className="ml-2" />
             </Button>
           </CardFooter> */}
-        </form>
-      </Card>
-      <Card className="p-6 bg-slate-100">
-        <div className="flex justify-between mb-4">
-          <span className="mr-4 font-bold">RRR</span>
-          {positionSize?.r3 && `1:${positionSize?.r3}`}
-        </div>
-        <div className="flex justify-between mb-4">
-          <span className="mr-4 font-bold">Risk amount</span>
-          {positionSize?.riskAmount}
-        </div>
-        <div className="flex justify-between mb-4">
-          <span className="mr-4 font-bold">Position Size</span>
-          {positionSize?.size}
-        </div>
-        <div className="flex justify-between mb-4">
-          <span className="mr-4 font-bold">Capital</span>
-          {positionSize?.requiredCapital}
-        </div>
-        {exchange?.futureOptions && (<div className="flex justify-between mb-4">
-          <span className="mr-4 font-bold">Capital with leverage</span>
-          {positionSize?.withLeverage}
-        </div>)}
-      </Card>
+          </form>
+        </Card>
+      </TooltipProvider>
     </div>
   );
 }
