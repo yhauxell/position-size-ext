@@ -2,9 +2,8 @@ import { useState, FC, useEffect } from 'react'
 import * as yup from "yup";
 
 import Decimal from 'decimal.js';
-import { useForm, useWatch } from 'react-hook-form';
-import { yupResolver } from "@hookform/resolvers/yup";
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { useForm } from 'react-hook-form';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
@@ -13,6 +12,9 @@ import { ExchangeData } from '@/lib/exchangeBalance';
 import { Tooltip, TooltipProvider } from '@radix-ui/react-tooltip';
 import { TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { InfoIcon } from 'lucide-react';
+import { Button } from '../ui/button';
+import { MagicWandIcon } from '@radix-ui/react-icons';
+import { formatNumber } from '@/lib/utils';
 
 type FormData = {
   accountBalance?: number;
@@ -21,16 +23,6 @@ type FormData = {
   sl: number;
   tp: number;
 };
-
-const schema = yup
-  .object({
-    accountBalance: yup.number().positive().required(),
-    entryPrice: yup.number().positive().required(),
-    riskPercentage: yup.number().positive().required(),
-    sl: yup.number().positive().required(),
-    tp: yup.number().positive().required(),
-  })
-  .required();
 
 interface CalculatedPositionSize {
   distanceToStop: number;
@@ -58,7 +50,6 @@ const caculatePositionSize = ({
   sl,
   tp,
 }: FormData, leverage: number) => {
-  //do the math 
 
   const dAccountBalance = new Decimal(accountBalance || 0);
   const dEntryPrice = new Decimal(entryPrice || 0);
@@ -66,8 +57,8 @@ const caculatePositionSize = ({
   const dSl = new Decimal(sl || 0);
   const dTp = new Decimal(tp || 0);
 
-  const distanceToStop = dEntryPrice.minus(dSl);
-  const distanceToProfit = dTp.minus(dEntryPrice);
+  const distanceToStop = dEntryPrice > dSl ? dEntryPrice.minus(dSl) : dSl.minus(dEntryPrice);
+  const distanceToProfit = dEntryPrice < dTp ? dTp.minus(dEntryPrice) : dEntryPrice.minus(dTp);
   const r3 = new Decimal(100).div(distanceToStop.div(distanceToProfit)).div(100); //100 / (distanceToStop / distanceToProfit) / 100);
   const riskAmount = dAccountBalance.mul(dRiskPercentage.div(100));
   const size = riskAmount.div(distanceToStop);
@@ -89,80 +80,70 @@ const caculatePositionSize = ({
 
 };
 
-enum Direction {
-  LONG = 'long',
-  SHORT = 'short'
-}
-
 export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchange }) => {
-  const {
-    register,
-    handleSubmit,
-    control,
-    formState: { errors },
-  } = useForm<FormData>({
-    resolver: yupResolver(schema),
-    mode: 'onChange'
-  });
-
-  const [direction, setDirection] = useState<Direction>(Direction.LONG);
-
-  const form = useWatch({ control });
-
   const [positionSize, setPositionSize] = useState<CalculatedPositionSize>();
   const defaultLeverage = 10;
   const [leverage, setLeverage] = useState<number>(defaultLeverage);
-  const [storedData, setStoredData] = useState<PositionSizeStorageData>({
-    leverage
-  });
+
+  const {
+    register,
+    setValue,
+    control,
+    formState: { errors },
+    handleSubmit
+  } = useForm<FormData>();
+
 
   const storageKey = `${STORAGE_KEY}${exchange ? exchange.code : ''}`;
 
   useEffect(() => {
-
     const getStoredData = async () => {
       const data = await chrome.storage.sync.get(storageKey);
 
-      if (data[storageKey]) {
-        setStoredData(data[storageKey]);
-        setLeverage(storedData.leverage ?? 0)
+      try {
+        const { accountBalance, levarege, riskPercentage } = JSON.parse(data[storageKey]);
+
+        if (accountBalance && riskPercentage) {
+          setValue('accountBalance', accountBalance);
+          setValue('riskPercentage', riskPercentage);
+        }
+
+        if (levarege) {
+          setLeverage(levarege);
+        }
+
+      } catch (error) {
+        console.log('error getting stored data: ', error);
       }
     }
 
     getStoredData();
 
-  }, [])
+  }, [storageKey])
 
 
-  useEffect(() => {
+  const onHandleSubmit = (form: FormData) => {
     const data = caculatePositionSize(form, leverage)
 
     setPositionSize(data);
 
     //save data to storage
     chrome.storage.sync.set({
-      [storageKey]: {
+      [storageKey]: JSON.stringify({
         accountBalance: form.accountBalance,
-        leverage,
-        riskPercentage: form.riskPercentage
-      }
+        riskPercentage: form.riskPercentage,
+        leverage: leverage
+      })
     });
 
-  }, [form])
+  };
 
   return (
     <div className="w-full grid grid-cols-1 grid-flow-row gap-2">
       <TooltipProvider>
         <Card>
           <CardHeader className="text-lg">
-            {/* <Tabs defaultValue="long" className='w-full'>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger className="data-[state=active]:text-green-600" value="long" onClick={() => setDirection(Direction.LONG)}>Long</TabsTrigger>
-              <TabsTrigger className=" data-[state=active]:text-red-600" value="short" onClick={() => setDirection(Direction.SHORT)}>Short</TabsTrigger>
-            </TabsList>
-          </Tabs> */}
-
-            <div className="flex justify-between">
+            <div className="flex justify-between p-2 border-red-500 border-solid border-1">
               <span className="mr-4 font-bold flex items-center gap-1">
                 Position Size
                 <Tooltip>
@@ -174,11 +155,11 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
                   </TooltipContent>
                 </Tooltip>
               </span>
-              {positionSize?.size}
+              <b>{formatNumber(positionSize?.size ?? 0, 'u')}</b>
             </div>
 
           </CardHeader>
-          <form>
+          <form onSubmit={handleSubmit(onHandleSubmit)}>
             <CardContent>
               <Card className='mb-6'>
                 <CardContent className='p-4'>
@@ -215,9 +196,8 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
                 <Input
                   id="accountBalance"
                   placeholder="Account balance"
-                  type="text"
-                  defaultValue={storedData.accountBalance}
-                  {...register("accountBalance", { required: true })}
+                  type="number"
+                  {...register("accountBalance", { required: true, valueAsNumber: true })}
                   aria-invalid={!!errors.accountBalance}
                 />
                 {errors.accountBalance && (
@@ -230,8 +210,8 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
                   id="riskPercentage"
                   placeholder="Risk % per trade"
                   type="number"
-                  defaultValue={storedData.riskPercentage}
-                  {...register("riskPercentage")}
+                  step="0.1"
+                  {...register("riskPercentage", { required: true, min: 0.1, max: 100, valueAsNumber: true })}
                   aria-invalid={!!errors.entryPrice}
                 />
               </div>
@@ -240,8 +220,11 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
                 <Input
                   id="entryPrice"
                   placeholder="Enter your entry price"
-                  type="text"
-                  {...register("entryPrice")}
+                  type="number"
+                  step="0.0001"
+                  {...register("entryPrice", {
+                    required: true, valueAsNumber: true,
+                  })}
                   aria-invalid={!!errors.entryPrice}
                 />
                 {errors.entryPrice && (
@@ -267,8 +250,9 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
                 <Input
                   id="sl"
                   placeholder="Stop loss price"
-                  type="text"
-                  {...register("sl")}
+                  type="number"
+                  step="0.0001"
+                  {...register("sl", { required: true, valueAsNumber: true })}
                   aria-invalid={!!errors.entryPrice}
                 />
               </div>
@@ -277,18 +261,19 @@ export const PositionSizeCalculator: FC<{ exchange?: ExchangeData }> = ({ exchan
                 <Input
                   id="tp"
                   placeholder="Take profit price"
-                  type="text"
-                  {...register("tp")}
+                  type="number"
+                  step="0.0001"
+                  {...register("tp", { required: true, valueAsNumber: true })}
                   aria-invalid={!!errors.entryPrice}
                 />
               </div>
             </CardContent>
-            {/* <CardFooter>
-            <Button variant="default" size="lg" className="flex-1">
-              Calculate
-              <MagicWandIcon className="ml-2" />
-            </Button>
-          </CardFooter> */}
+            <CardFooter>
+              <Button variant="default" size="lg" className="flex-1">
+                Calculate
+                <MagicWandIcon className="ml-2" />
+              </Button>
+            </CardFooter>
           </form>
         </Card>
       </TooltipProvider>

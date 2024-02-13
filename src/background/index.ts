@@ -18,8 +18,6 @@ chrome.sidePanel
 
     const currentExchange = KNOWN_EXCHANGES.find((exchange) => url.hostname.includes(exchange.url));
 
-    console.log('currentExchange', currentExchange)
-
     if (currentExchange) {
       await chrome.sidePanel.setOptions({
         tabId,
