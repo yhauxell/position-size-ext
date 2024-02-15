@@ -37,6 +37,10 @@ export default defineManifest({
       matches: [],
     },
   ],
-  permissions: ['storage', 'tabs', 'scripting', 'sidePanel'],
+  permissions: ['storage', 'tabs', 'scripting', 'sidePanel', 'identity'],
   host_permissions: ['*://*/*'],
+  oauth2: {
+    client_id: "217438524841-ksgtisjjq7bkac74d6265upems1221oo.apps.googleusercontent.com",
+    scopes: ["openid", "email", "profile"]
+  }
 })
